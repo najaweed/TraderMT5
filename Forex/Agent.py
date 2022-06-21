@@ -78,6 +78,8 @@ class Agent:
 
     def take_action(self, step_data_frame):
         self.df = step_data_frame
+
+
         self.signal = self.strategy(step_data_frame).signal
 
         if not self._position():
