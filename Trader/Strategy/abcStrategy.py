@@ -6,7 +6,7 @@ class Strategy(ABC):
     def signal(self):
         return {
             'position': self._position(),
-            'st': self._estimate_st(),
+            'st': self._estimate_sl(),
             'tp': self._estimate_tp(),
             'volume': self._estimate_volume(),
             # 'expiration': self._estimate_expire_time(),
@@ -29,7 +29,7 @@ class Strategy(ABC):
         raise NotImplemented
 
     @abstractmethod
-    def _estimate_st(self) -> float:
+    def _estimate_sl(self) -> float:
         raise NotImplemented
 
     @abstractmethod

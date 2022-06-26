@@ -33,18 +33,18 @@ class Agent:
         else:
             return False
 
-    def _stop_loss(self, st_point=50.):
+    def _stop_loss(self, sl_point=50.):
         if self._position() == 'SELL':
-            if self.signal['st']:
-                return self._price_deal() + self.signal['st']
+            if self.signal['sl']:
+                return self._price_deal() + self.signal['sl']
             else:
-                return self._price_deal() + 1 * st_point
+                return self._price_deal() + 1 * sl_point
 
         elif self._position() == 'BUY':
-            if self.signal['st']:
-                return self._price_deal() - self.signal['st']
+            if self.signal['sl']:
+                return self._price_deal() - self.signal['sl']
             else:
-                return self._price_deal() - 1 * st_point
+                return self._price_deal() - 1 * sl_point
         else:
             return None
 
@@ -76,11 +76,10 @@ class Agent:
         else:
             return 0.01
 
-    def take_action(self, step_data_frame):
-        self.df = step_data_frame
+    def take_action(self, step_data_frame_1, step_data_frame_2):
+        self.df = step_data_frame_1
 
-
-        self.signal = self.strategy(step_data_frame).signal
+        self.signal = self.strategy(step_data_frame_1, step_data_frame_2).signal
 
         if not self._position():
             return {}
