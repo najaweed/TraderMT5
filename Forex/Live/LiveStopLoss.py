@@ -33,7 +33,7 @@ class LiveStopLoss:
             sym_positions.append(pos)
         return sym_positions
 
-    def get_live_tick(self, time_shift=3):
+    def get_live_tick(self, time_shift=5):
         time_from = datetime.utcnow() - timedelta(minutes=time_shift)
         ticks = mt5.copy_ticks_from(self.config['symbol'], time_from, 100000, mt5.COPY_TICKS_ALL)
         return pd.DataFrame(ticks)
@@ -115,7 +115,7 @@ class LiveStopLoss:
                     self.set_stop_loss(position, new_sl_price)
                     self.last_sl_price = new_sl_price
                 # bull-back
-                pull_back= any(ticks.ask.diff()[-10] >= float(self.config['pull_back_threshold'] * self.point))
+                pull_back= any(ticks.ask.diff().to_numpy()[-5:] >= float(self.config['pull_back_threshold'] * self.point))
                 if pull_back:
                     print('pull back of sell position - Close Position')
                     self.close_opened_position(position)
@@ -130,7 +130,8 @@ class LiveStopLoss:
                     self.set_stop_loss(position, new_sl_price)
                     self.last_sl_price = new_sl_price
                 # bull-back
-                pull_back = any(ticks.bid.diff()[-10] <= -float(self.config['pull_back_threshold'] * self.point))
+
+                pull_back = any(ticks.bid.diff().to_numpy()[-5:] <= -float(self.config['pull_back_threshold'] * self.point))
                 if pull_back:
                     # close order
                     print('pull back of buy position - Close Position')
