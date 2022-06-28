@@ -16,7 +16,7 @@ class TrendChannels:
     def get_trends(self):
         trend_points = {}
 
-        for i in reversed(range(1, 360)):
+        for i in reversed(range(1, 60)):
             for tf in ['min']:
                 df = self._gen_tick_bar(f'{i}{tf}')
                 arg_high = argrelextrema(df.high.to_numpy(), np.greater, order=2)[0]
@@ -111,11 +111,13 @@ class Plotter:
                 width = 8
             else:
                 pass
+            print(v)
+            print(v[1][0][1])
 
-            if k.split(',')[-1] == 'resistance':
+            if k.split(',')[-1] == 'resistance' and r1m.close[-1] < v[1][0][1] :
                 fplt.add_line(v[0][0], v[0][1], color='#360000', width=0.2, ax=ax)
                 fplt.add_line(v[1][0], v[1][1], color='#4e0000', width=width, ax=ax)
-            elif k.split(',')[-1] == 'support':
+            elif k.split(',')[-1] == 'support' and r1m.close[-1] > v[1][0][1] :
                 fplt.add_line(v[0][0], v[0][1], color='#132a43', width=0.2, ax=ax)
                 fplt.add_line(v[1][0], v[1][1], color='#162640', width=width, ax=ax)
         fplt.show(qt_exec=True)

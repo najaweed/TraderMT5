@@ -6,6 +6,7 @@ import MetaTrader5 as mt5
 if not mt5.initialize():
     print("initialize() failed, error code =", mt5.last_error())
     quit()
+
 class LivePlotter:
     if not mt5.initialize():
         print("initialize() failed, error code =", mt5.last_error())
@@ -74,7 +75,7 @@ def plt_candlestick(df: pd.DataFrame):
 
 trader_config = {
     "symbol": 'XAUUSD',
-    "window": 360 * 6 * 6,
+    "window": 360 * 6,
     "digit": 1e2,
     "plotter": Plotter([]),
 }

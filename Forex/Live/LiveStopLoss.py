@@ -22,7 +22,6 @@ class LiveStopLoss:
         self.point = mt5.symbol_info(self.config['symbol'])._asdict()['point']
         self.last_trail_tick = None
 
-        # self.saved_profit = self.config['min_profit'] * self.point
         self.last_sl_price = 0
 
     def get_opened_positions(self):
@@ -44,7 +43,7 @@ class LiveStopLoss:
         deal_price = 0.
         last_deal_type = position['type']
 
-        #last_deal_volume = position['volume']/2 if position['volume'] >=0.1 else 0.1
+        # last_deal_volume = position['volume']/2 if position['volume'] >=0.1 else 0.1
         last_deal_volume = position['volume']
 
         if last_deal_type == mt5.ORDER_TYPE_BUY:
@@ -158,7 +157,7 @@ config = {
     'symbol': 'XAUUSD',
     'min_profit': 80,
     'stop_loss': 60,
-    'trail_stop_loss': 20,
+    'trail_stop_loss': 30,
     'pull_back_threshold': 10,
 }
 live_sl = LiveStopLoss(config)
