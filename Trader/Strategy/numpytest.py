@@ -22,21 +22,26 @@ timezone = pytz.timezone("Etc/UTC")
 
 from datetime import datetime, timedelta
 
-utc_from = datetime(2022, 6, 24, 22,1, tzinfo=timezone)
-print(utc_from - timedelta(minutes=5))
+# = datetime(2022, 6, 24, 22, 1, tzinfo=timezone)
+#print(utc_from - timedelta(minutes=5))
 # datetime.utcnow() > utc_from
-time_from = utc_from - timedelta(minutes=300)
+time_from = datetime(2022, 6, 30, 22, 1, tzinfo=timezone)#datetime.utcnow() - timedelta(minutes=3)
 
 # request 100 000 EURUSD ticks starting from 10.01.2019 in UTC time zone
 # ticks = mt5.copy_ticks_range("XAUUSD", utc_from, utc_to, mt5.COPY_TICKS_ALL)
-ticks =mt5.copy_ticks_from("XAUUSD", time_from, 100, mt5.COPY_TICKS_ALL)
+ticks = mt5.copy_ticks_from("XAUUSD", time_from, 100, mt5.COPY_TICKS_ALL)
 ticks_frame = pd.DataFrame(ticks)
 # convert time in seconds into the datetime format
 ticks_frame['time'] = pd.to_datetime(ticks_frame['time'], unit='s')
-print(ticks_frame.tail(10))
-import matplotlib.pyplot as plt
-print(any(ticks_frame.ask.diff()[-10:]) >=1)
-plt.plot(ticks_frame.ask, c='r')
-plt.plot(ticks_frame.bid, c='b')
-
-plt.show()
+data_x = ticks_frame.ask
+from Forex.Live.LiveStopLoss import LiveStopLoss
+config = {
+    'symbol': 'XAUUSD',
+    'min_profit': 300,
+    'stop_loss': 300,
+    'trail_stop_loss': 300,
+    'pull_back_threshold': 30,
+}
+live_sl = LiveStopLoss(config)
+print(ticks_frame)
+print(live_sl.pull_back_buy(ticks_frame.bid))

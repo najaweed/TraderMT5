@@ -1,8 +1,8 @@
+from datetime import datetime, timedelta
+import time
 import MetaTrader5 as mt5
 import pandas as pd
 import numpy as np
-import time
-from datetime import datetime, timedelta
 
 if not mt5.initialize():
     print("initialize() failed, error code =", mt5.last_error())
@@ -17,11 +17,8 @@ class LiveStopLoss:
     def __init__(self,
                  c_config,
                  ):
-
         self.config = c_config
         self.point = mt5.symbol_info(self.config['symbol'])._asdict()['point']
-        self.last_trail_tick = None
-
         self.last_sl_price = 0
 
     def get_opened_positions(self):
@@ -43,7 +40,7 @@ class LiveStopLoss:
         deal_price = 0.
         last_deal_type = position['type']
 
-        # last_deal_volume = position['volume']/2 if position['volume'] >=0.1 else 0.1
+        # last_deal_volume = position['volume']/2 if position['volume'] >=0.01 else 0.01
         last_deal_volume = position['volume']
 
         if last_deal_type == mt5.ORDER_TYPE_BUY:
@@ -103,35 +100,67 @@ class LiveStopLoss:
 
         mt5.order_send(request)
 
+    def pull_back_buy(self, ticks_bid):
+        threshold = 0
+
+        diff_bid = ticks_bid.diff().tail(20).to_numpy()
+        print(diff_bid)
+        for x in reversed(diff_bid):
+            print(threshold)
+            if x >= 0:
+                threshold = 0
+            elif x < 0:
+                threshold += x
+            if threshold < -float(self.config['pull_back_threshold'] * self.point):
+                print(f'break threshold buy - {threshold}')
+                return True
+        return False
+
+    def pull_back_sell(self, ticks_ask):
+        threshold = 0
+        diff_ask = ticks_ask.diff().tail(20).to_numpy()
+        for x in reversed(diff_ask):
+            print(threshold)
+            if x <= 0:
+                threshold = 0
+            elif x > 0:
+                threshold += x
+            if threshold > float(self.config['pull_back_threshold'] * self.point):
+                print(f'break threshold sell - {threshold}')
+                return True
+        return False
+
     def trail_stop_loss(self, position):
 
         if position['type'] == mt5.ORDER_TYPE_SELL:
             if position['profit'] >= self.config['min_profit'] * self.point:
-                ticks = self.get_live_tick()
+
+                # simple fixed sl
                 new_sl_price = position['price_current'] + self.config['trail_stop_loss'] * self.point
                 if new_sl_price < self.last_sl_price:
                     print('trail sl ', self.last_sl_price, new_sl_price)
                     self.set_stop_loss(position, new_sl_price)
                     self.last_sl_price = new_sl_price
-                # bull-back
-                pull_back= any(ticks.ask.diff().to_numpy()[-5:] >= float(self.config['pull_back_threshold'] * self.point))
-                if pull_back:
+
+                # pull-back sell
+                ticks = self.get_live_tick()
+                if self.pull_back_sell(ticks.ask):
                     print('pull back of sell position - Close Position')
                     self.close_opened_position(position)
 
         elif position['type'] == mt5.ORDER_TYPE_BUY:
             if position['profit'] >= self.config['min_profit'] * self.point:
-                ticks = self.get_live_tick()
+
                 # simple fixed sl
                 new_sl_price = position['price_current'] - self.config['trail_stop_loss'] * self.point
                 if new_sl_price > self.last_sl_price:
                     print('trail sl  from', self.last_sl_price, 'to', new_sl_price)
                     self.set_stop_loss(position, new_sl_price)
                     self.last_sl_price = new_sl_price
-                # bull-back
 
-                pull_back = any(ticks.bid.diff().to_numpy()[-5:] <= -float(self.config['pull_back_threshold'] * self.point))
-                if pull_back:
+                # pull-back buy
+                ticks = self.get_live_tick()
+                if self.pull_back_buy(ticks.bid):
                     # close order
                     print('pull back of buy position - Close Position')
                     self.close_opened_position(position)
@@ -155,10 +184,10 @@ class LiveStopLoss:
 
 config = {
     'symbol': 'XAUUSD',
-    'min_profit': 80,
-    'stop_loss': 60,
-    'trail_stop_loss': 30,
-    'pull_back_threshold': 10,
+    'min_profit': 300,
+    'stop_loss': 300,
+    'trail_stop_loss': 300,
+    'pull_back_threshold': 30,
 }
 live_sl = LiveStopLoss(config)
 live_sl.main()
