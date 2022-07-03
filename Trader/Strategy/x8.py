@@ -11,7 +11,6 @@ df_rates = live_trader.get_rates(mt5.TIMEFRAME_M1)
 df = df_rates
 
 
-
 class Candle:
     def __init__(self,
                  df_ticks,
