@@ -134,7 +134,7 @@ class LiveStopLoss:
 
         if position['type'] == mt5.ORDER_TYPE_SELL:
             #('position SELL ')
-            position_profit = position['price_open'] - position['price_current']
+            position_profit = position['price_current'] - position['price_open']
 
             if 2 * self.config['min_profit'] * self.point > position_profit >= self.config[
                 'min_profit'] * self.point:
@@ -215,13 +215,13 @@ class LiveStopLoss:
             time.sleep(0.00001)
 
 
-sl = 190
+sl = 150
 config = {
-    'symbol': 'GBPJPY_i',
-    'min_profit': 190,
-    'stop_loss': sl,
-    'trail_stop_loss': sl,
-    'pull_back_threshold': 32,
+    'symbol': 'GBPJPY',
+    'min_profit': 98,
+    'stop_loss': 98,
+    'trail_stop_loss': 98,
+    'pull_back_threshold': 33,
     'cooldown_strategy': (False, 10)
 }
 live_sl = LiveStopLoss(config)

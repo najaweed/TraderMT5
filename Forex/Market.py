@@ -31,6 +31,18 @@ class LiveTicks:
         self.all_rates = all_prices
         return all_prices
 
+    def get_rates_time(self, time_frame=mt5.TIMEFRAME_M1):
+        all_prices = pd.DataFrame(mt5.copy_rates_from_pos(self.symbol, time_frame, 0, self.window))
+        #print(all_prices)
+        all_prices['time'] = pd.to_datetime(all_prices['time'], unit='s')
+        all_prices = all_prices.set_index('time')
+        # all_prices = all_prices[~all_prices.index.duplicated(keep='first')]
+        # all_prices = all_prices.reindex(pd.date_range(all_prices.index[0], all_prices.index[-1], freq='min'))
+        # all_prices = all_prices.fillna(method='bfill')
+        # all_prices = all_prices.fillna(method='ffill')
+        self.all_rates = all_prices
+        return all_prices
+
     def percentage_return(self, price_type='close'):
         all_prices = self.all_rates[f'{price_type}']
         pct_prices = all_prices.pct_change().fillna(method='bfill')

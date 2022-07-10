@@ -74,7 +74,7 @@ def plt_candlestick(df: pd.DataFrame):
 
 
 trader_config = {
-    "symbol": 'XAUUSD',
+    "symbol": 'GBPJPY',
     "window": 360 * 6,
     "digit": 1e2,
     "plotter": Plotter([]),

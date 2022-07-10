@@ -34,14 +34,4 @@ ticks_frame = pd.DataFrame(ticks)
 # convert time in seconds into the datetime format
 ticks_frame['time'] = pd.to_datetime(ticks_frame['time'], unit='s')
 data_x = ticks_frame.ask
-from Forex.Live.LiveStopLoss import LiveStopLoss
-config = {
-    'symbol': 'XAUUSD',
-    'min_profit': 300,
-    'stop_loss': 300,
-    'trail_stop_loss': 300,
-    'pull_back_threshold': 30,
-}
-live_sl = LiveStopLoss(config)
-print(ticks_frame)
-print(live_sl.pull_back_buy(ticks_frame.bid))
+

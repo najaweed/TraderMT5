@@ -3,6 +3,7 @@ import pandas as pd
 
 
 class DMD:
+
     """
     Examples
     --------
