@@ -133,59 +133,23 @@ class LiveStopLoss:
     def trail_stop_loss(self, position):
 
         if position['type'] == mt5.ORDER_TYPE_SELL:
-            #('position SELL ')
-            position_profit = position['price_current'] - position['price_open']
-
-            if 2 * self.config['min_profit'] * self.point > position_profit >= self.config[
-                'min_profit'] * self.point:
-                # simple fixed sl
+            position_profit = position['price_open'] - position['price_current']
+            if position_profit >= 1 * self.config['min_profit'] * self.point:
                 new_sl_price = position['price_current'] + self.config['trail_stop_loss'] * self.point
-                if new_sl_price < self.last_sl_price:
-                    print('trail 1 sl ', self.last_sl_price, new_sl_price)
-                    self.set_stop_loss(position, new_sl_price)
-                    self.last_sl_price = new_sl_price
-
-                # cooldown
-                if self.config["cooldown_strategy"][0]:
-                    if self.cooldown:
-                        self.cooldown = False
-                        print(f'sleep {self.config["cooldown_strategy"][1]} second')
-                        time.sleep(self.config["cooldown_strategy"][1])
-
-            if position_profit >= 2 * self.config['min_profit'] * self.point:
-                # simple fixed sl
-                new_sl_price = position['price_current'] + 10 * self.point
                 if new_sl_price < self.last_sl_price:
                     print('trail 2 sl ', self.last_sl_price, new_sl_price)
                     self.set_stop_loss(position, new_sl_price)
                     self.last_sl_price = new_sl_price
 
-                # pull-back sell
                 ticks = self.get_live_tick()
                 if self.pull_back_sell(ticks.ask):
                     print('pull back of sell position - Close Position')
                     self.close_opened_position(position)
 
         elif position['type'] == mt5.ORDER_TYPE_BUY:
-            # print('position BUY ')
             position_profit = position['price_current'] - position['price_open']
-            if 2 * self.config['min_profit'] * self.point > position_profit >= self.config['min_profit'] * self.point:
-                # simple fixed sl
+            if position_profit >= 1 * self.config['min_profit'] * self.point:
                 new_sl_price = position['price_current'] - self.config['trail_stop_loss'] * self.point
-                if new_sl_price > self.last_sl_price:
-                    print('trail 1 sl  from', self.last_sl_price, 'to', new_sl_price)
-                    self.set_stop_loss(position, new_sl_price)
-                    self.last_sl_price = new_sl_price
-
-                # cooldown
-                if self.config["cooldown_strategy"][0]:
-                    if self.cooldown:
-                        self.cooldown = False
-                        print(f'sleep {self.config["cooldown_strategy"][1]} second')
-                        time.sleep(self.config["cooldown_strategy"][1])
-
-            if position_profit >= 2 * self.config['min_profit'] * self.point:
-                new_sl_price = position['price_current'] - 10 * self.point
                 if new_sl_price > self.last_sl_price:
                     print('trail 2 sl  from', self.last_sl_price, 'to', new_sl_price)
                     self.set_stop_loss(position, new_sl_price)
@@ -193,7 +157,6 @@ class LiveStopLoss:
 
                 ticks = self.get_live_tick()
                 if self.pull_back_buy(ticks.bid):
-                    # close order
                     print('pull back of buy position - Close Position')
                     self.close_opened_position(position)
         else:
@@ -204,8 +167,11 @@ class LiveStopLoss:
             while len(self.get_opened_positions()) != 0:
                 positions = self.get_opened_positions()
                 for position in positions:
+
                     if position['sl'] == 0:
                         self.set_stop_loss(position)
+                    elif position['sl'] != 0:
+                        self.last_sl_price = position['sl']
                     else:
                         self.trail_stop_loss(position)
             else:
@@ -215,14 +181,12 @@ class LiveStopLoss:
             time.sleep(0.00001)
 
 
-sl = 150
 config = {
     'symbol': 'GBPJPY',
-    'min_profit': 98,
-    'stop_loss': 98,
-    'trail_stop_loss': 98,
-    'pull_back_threshold': 33,
-    'cooldown_strategy': (False, 10)
+    'min_profit': 130,
+    'stop_loss': 130,
+    'trail_stop_loss': 130,
+    'pull_back_threshold': 43,
 }
 live_sl = LiveStopLoss(config)
 live_sl.main()
