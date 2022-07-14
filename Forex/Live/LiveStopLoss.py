@@ -10,6 +10,7 @@ if not mt5.initialize():
     quit()
 timezone = pytz.timezone("Etc/GMT-3")
 
+
 class LiveStopLoss:
     if not mt5.initialize():
         print("initialize() failed, error code =", mt5.last_error())
@@ -21,9 +22,8 @@ class LiveStopLoss:
         self.config = c_config
         self.point = mt5.symbol_info(self.config['symbol'])._asdict()['point']
         self.last_sl_price = None
-        self.cooldown = True
         self.sl_point = None
-        self.threshold = self._get_spread()
+        self.tp_point = None
 
     def get_opened_positions(self):
         positions = mt5.positions_get(symbol=self.config['symbol'])
@@ -32,12 +32,6 @@ class LiveStopLoss:
             pos = pos._asdict()
             sym_positions.append(pos)
         return sym_positions
-
-    def _get_spread(self):
-        ticks = self.get_live_tick()
-        spread = float(ticks.ask[-1] - ticks.bid[-1])
-        print(f'Threshold Spread is {spread/self.point} point')
-        return spread
 
     def get_live_tick(self, time_shift=20):
         time_from = datetime.now(tz=timezone) - timedelta(minutes=time_shift)
@@ -85,12 +79,30 @@ class LiveStopLoss:
 
         mt5.order_send(request)
 
+    def set_take_profit(self, position):
+        tp_price = 0
+        if position['type'] == mt5.ORDER_TYPE_SELL:
+            tp_price = position['price_open'] - self.tp_point
+
+        elif position['type'] == mt5.ORDER_TYPE_BUY:
+            tp_price = position['price_open'] + self.tp_point
+
+        request = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": position['symbol'],
+            "position": position['ticket'],
+            "sl": position['sl'],
+            "tp": tp_price,
+        }
+
+        mt5.order_send(request)
+
     def set_stop_loss(self, position, stop_loss_price=None):
         sl_price = 0
         if position['type'] == mt5.ORDER_TYPE_SELL:
             if stop_loss_price is not None:
                 sl_price = stop_loss_price
-            else:
+            elif stop_loss_price is None:
                 sl_price = position['price_current'] + self.config['stop_loss'] * self.point
                 self.last_sl_price = sl_price
                 print('position without SL , set automatic SL_price', sl_price)
@@ -98,7 +110,7 @@ class LiveStopLoss:
         elif position['type'] == mt5.ORDER_TYPE_BUY:
             if stop_loss_price is not None:
                 sl_price = stop_loss_price
-            else:
+            elif stop_loss_price is None:
                 sl_price = position['price_current'] - self.config['stop_loss'] * self.point
                 self.last_sl_price = sl_price
                 print('Position without Stop Loss, Set Automatic in ', sl_price)
@@ -115,7 +127,8 @@ class LiveStopLoss:
 
         mt5.order_send(request)
 
-    def pull_back_buy(self, ticks_bid):
+    @staticmethod
+    def pull_back_buy(ticks_bid, pull_back_threshold):
         threshold = 0
 
         diff_bid = ticks_bid.diff().tail(20).to_numpy()
@@ -125,24 +138,37 @@ class LiveStopLoss:
                 threshold = 0
             elif x <= 0:
                 threshold += x
-            if threshold < -self.threshold:
-                print(f'Break Buy Threshold : {threshold}')
+            if threshold < -pull_back_threshold:
+                print(f'Break Buy Pull Back Threshold {pull_back_threshold} by {threshold}')
                 return True
         return False
 
-    def pull_back_sell(self, ticks_ask):
+    @staticmethod
+    def pull_back_sell(ticks_ask, pull_back_threshold):
         threshold = 0
         diff_ask = ticks_ask.diff().tail(20).to_numpy()
         for x in reversed(diff_ask):
-            # print(threshold)
             if x < 0:
                 threshold = 0
             elif x >= 0:
                 threshold += x
-            if threshold > self.threshold:
-                print(f'Break SELL threshold  : {threshold}')
+            if threshold > pull_back_threshold:
+                print(f'Break Sell Pull Back Threshold {pull_back_threshold} by {threshold}')
                 return True
+            # print(f'High Freq pullback {threshold} , threshold live {pull_back_threshold}')
         return False
+
+    def _set_threshold_pull_back(self, spread, profit_point):
+        min_threshold = spread / 3
+        max_threshold = self.sl_point / 3
+        profit_point = profit_point - self.sl_point
+        if profit_point > 0:
+            threshold = max_threshold * (1 - profit_point / self.tp_point)
+        else:
+            threshold = max_threshold
+        threshold = np.clip(threshold, min_threshold, max_threshold)
+        # print(f'Threshold live {int(threshold / self.point)}')
+        return threshold
 
     def trail_stop_loss(self, position):
 
@@ -157,7 +183,10 @@ class LiveStopLoss:
 
                 if self.config['high_freq_pull_back']:
                     ticks = self.get_live_tick()
-                    if self.pull_back_sell(ticks.ask):
+                    spread = float(ticks.ask[-1] - ticks.bid[-1])
+
+                    pull_back_threshold = self._set_threshold_pull_back(spread, profit_point)
+                    if self.pull_back_sell(ticks.ask, pull_back_threshold):
                         print('Pull Back of Sell Position - Close Position')
                         self.close_opened_position(position)
 
@@ -172,7 +201,9 @@ class LiveStopLoss:
 
                 if self.config['high_freq_pull_back']:
                     ticks = self.get_live_tick()
-                    if self.pull_back_buy(ticks.bid):
+                    spread = float(ticks.ask[-1] - ticks.bid[-1])
+                    pull_back_threshold = self._set_threshold_pull_back(spread, profit_point)
+                    if self.pull_back_buy(ticks.bid, pull_back_threshold):
                         print('Pull Back of Buy Position - Close Position')
                         self.close_opened_position(position)
         else:
@@ -190,25 +221,34 @@ class LiveStopLoss:
                         if positions_x['ticket'] == position['ticket']:
                             self.last_sl_price = positions_x['sl']
                             self.sl_point = abs(positions_x['sl'] - positions_x['price_open'])
-                            print(f'Set Trail Stop Loss Automatic in {int(self.sl_point/self.point)} point ')
+                            self.tp_point = 2 * self.sl_point
+                            print(f'Set Automatic Trail Stop Loss  in {int(self.sl_point / self.point)} point ')
+                            print(f'Set Automatic Take Profit in {int(self.tp_point / self.point)} point ')
 
                     elif position['sl'] != 0 and self.last_sl_price is None:
                         self.last_sl_price = position['sl']
                         self.sl_point = abs(position['sl'] - position['price_open'])
-                        print(f'Set Trail Stop Loss from Position in {int(self.sl_point/self.point)} point ')
+                        print(f'Set Trail Stop Loss from Position in {int(self.sl_point / self.point)} point ')
+
+                        if position['tp'] != 0:
+                            self.tp_point = abs(position['tp'] - position['price_open'])
+                            print(f'Set Take Profit from Position in {int(self.tp_point / self.point)} point ')
+                        elif position['tp'] == 0:
+                            self.tp_point = 2 * self.sl_point
+                            print(f'Set Automatic Take Profit in {int(self.tp_point / self.point)} point ')
+
                         # check money management of SL if ture , set self.trail_sl as position['sl']
                     else:
                         self.trail_stop_loss(position)
             else:
                 print(f'No Position in {self.config["symbol"]}')
-                self.cooldown = True
                 time.sleep(1)
-            time.sleep(5)
+            time.sleep(1)
 
 
 config = {
     'symbol': 'GBPJPY_i',
-    'stop_loss': 160,
+    'stop_loss': 170,
     'high_freq_pull_back': True,
 }
 live_sl = LiveStopLoss(config)
