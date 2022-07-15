@@ -71,6 +71,7 @@ class LiveStopLoss:
 
     def set_stop_loss(self, position, stop_loss_price=None):
         sl_price = 0
+        tp_price = 0
         if position['type'] == mt5.ORDER_TYPE_SELL:
             if stop_loss_price is not None:
                 sl_price = stop_loss_price
@@ -79,6 +80,13 @@ class LiveStopLoss:
                 self.last_sl_price = sl_price
                 print('Position Sell without SL , set automatic SL_price', sl_price)
 
+            if position['tp'] == 0:
+                tp_price = position['price_current'] - 3 * self.config['stop_loss'] * self.point
+                print('Position Sell without TP, Set Automatic in ', tp_price)
+
+            else:
+                tp_price = position['tp']
+
         elif position['type'] == mt5.ORDER_TYPE_BUY:
             if stop_loss_price is not None:
                 sl_price = stop_loss_price
@@ -86,6 +94,13 @@ class LiveStopLoss:
                 sl_price = position['price_current'] - self.config['stop_loss'] * self.point
                 self.last_sl_price = sl_price
                 print('Position Buy without SL, Set Automatic in ', sl_price)
+
+            if position['tp'] == 0:
+                tp_price = position['price_current'] + 3 * self.config['stop_loss'] * self.point
+                print('Position Buy without TP, Set Automatic in ', tp_price)
+
+            else:
+                tp_price = position['tp']
         else:
             pass
 
@@ -94,7 +109,7 @@ class LiveStopLoss:
             "symbol": position['symbol'],
             "position": position['ticket'],
             "sl": sl_price,
-            # "tp": tp_price,
+            "tp": tp_price,
         }
 
         mt5.order_send(request)
@@ -200,7 +215,6 @@ class LiveStopLoss:
 
     def main(self):
         while True:
-            print(self.get_live_tick())
             while len(self.get_opened_positions()) != 0:
                 positions = self.get_opened_positions()
                 for position in positions:
@@ -230,8 +244,8 @@ class LiveStopLoss:
                         self.trail_stop_loss(position)
             else:
                 print(f'No Position in {self.config["symbol"]}')
-                time.sleep(0.01)
-            time.sleep(0.01)
+                time.sleep(1)
+            time.sleep(1)
 
 
 config = {
