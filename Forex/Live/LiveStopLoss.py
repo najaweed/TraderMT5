@@ -33,16 +33,6 @@ class LiveStopLoss:
             sym_positions.append(pos)
         return sym_positions
 
-    def get_live_tick(self, time_shift=20):
-        time_from = datetime.now(tz=timezone) - timedelta(minutes=time_shift)
-
-        ticks = mt5.copy_ticks_from(self.config['symbol'], time_from, 100000, mt5.COPY_TICKS_ALL)
-        ticks_frame = pd.DataFrame(ticks)
-        ticks_frame['time'] = pd.to_datetime(ticks_frame['time'], unit='s')
-        ticks_frame = ticks_frame.set_index('time')
-        last_ticks_index = ticks_frame.index[-1] - timedelta(minutes=time_shift)
-        return ticks_frame.loc[last_ticks_index:, :]
-
     def close_opened_position(self, position):
 
         deal_type = 0.
@@ -79,24 +69,6 @@ class LiveStopLoss:
 
         mt5.order_send(request)
 
-    def set_take_profit(self, position):
-        tp_price = 0
-        if position['type'] == mt5.ORDER_TYPE_SELL:
-            tp_price = position['price_open'] - self.tp_point
-
-        elif position['type'] == mt5.ORDER_TYPE_BUY:
-            tp_price = position['price_open'] + self.tp_point
-
-        request = {
-            "action": mt5.TRADE_ACTION_SLTP,
-            "symbol": position['symbol'],
-            "position": position['ticket'],
-            "sl": position['sl'],
-            "tp": tp_price,
-        }
-
-        mt5.order_send(request)
-
     def set_stop_loss(self, position, stop_loss_price=None):
         sl_price = 0
         if position['type'] == mt5.ORDER_TYPE_SELL:
@@ -105,7 +77,7 @@ class LiveStopLoss:
             elif stop_loss_price is None:
                 sl_price = position['price_current'] + self.config['stop_loss'] * self.point
                 self.last_sl_price = sl_price
-                print('position without SL , set automatic SL_price', sl_price)
+                print('Position Sell without SL , set automatic SL_price', sl_price)
 
         elif position['type'] == mt5.ORDER_TYPE_BUY:
             if stop_loss_price is not None:
@@ -113,7 +85,7 @@ class LiveStopLoss:
             elif stop_loss_price is None:
                 sl_price = position['price_current'] - self.config['stop_loss'] * self.point
                 self.last_sl_price = sl_price
-                print('Position without Stop Loss, Set Automatic in ', sl_price)
+                print('Position Buy without SL, Set Automatic in ', sl_price)
         else:
             pass
 
@@ -126,6 +98,22 @@ class LiveStopLoss:
         }
 
         mt5.order_send(request)
+
+    #
+    def get_live_tick(self, time_shift=20):
+        time_from = datetime.now(tz=timezone) - timedelta(minutes=time_shift)
+
+        ticks = mt5.copy_ticks_from(self.config['symbol'], time_from, 100000, mt5.COPY_TICKS_ALL)
+        if ticks is None:
+            print('TICK ARE NOT AVAILABLE , WAIT FOR 1 sec and retry')
+            time.sleep(1)
+            self.get_live_tick()
+
+        ticks_frame = pd.DataFrame(ticks)
+        ticks_frame['time'] = pd.to_datetime(ticks_frame['time'], unit='s')
+        ticks_frame = ticks_frame.set_index('time')
+        last_ticks_index = ticks_frame.index[-1] - timedelta(minutes=time_shift)
+        return ticks_frame.loc[last_ticks_index:, :]
 
     @staticmethod
     def pull_back_buy(ticks_bid, pull_back_threshold):
@@ -153,7 +141,7 @@ class LiveStopLoss:
             elif x >= 0:
                 threshold += x
             if threshold > pull_back_threshold:
-                print(f'Break Sell Pull Back Threshold {pull_back_threshold} by {threshold}')
+                print(f'Break Sell Pull Back Threshold {(pull_back_threshold)} by {threshold}')
                 return True
             # print(f'High Freq pullback {threshold} , threshold live {pull_back_threshold}')
         return False
@@ -170,16 +158,17 @@ class LiveStopLoss:
         # print(f'Threshold live {int(threshold / self.point)}')
         return threshold
 
-    def trail_stop_loss(self, position):
+    #
 
+    def trail_stop_loss(self, position):
         if position['type'] == mt5.ORDER_TYPE_SELL:
             profit_point = position['price_open'] - position['price_current']
             if profit_point >= 1 * self.sl_point:
                 new_sl_price = position['price_current'] + self.sl_point
                 if new_sl_price < self.last_sl_price:
                     self.set_stop_loss(position, new_sl_price)
-                    self.last_sl_price = new_sl_price
                     print('Trail  Stop Loss  from', self.last_sl_price, 'to', new_sl_price)
+                    self.last_sl_price = new_sl_price
 
                 if self.config['high_freq_pull_back']:
                     ticks = self.get_live_tick()
@@ -196,8 +185,8 @@ class LiveStopLoss:
                 new_sl_price = position['price_current'] - self.sl_point
                 if new_sl_price > self.last_sl_price:
                     self.set_stop_loss(position, new_sl_price)
-                    self.last_sl_price = new_sl_price
                     print('Trail  Stop Loss  from', self.last_sl_price, 'to', new_sl_price)
+                    self.last_sl_price = new_sl_price
 
                 if self.config['high_freq_pull_back']:
                     ticks = self.get_live_tick()
@@ -211,7 +200,7 @@ class LiveStopLoss:
 
     def main(self):
         while True:
-
+            print(self.get_live_tick())
             while len(self.get_opened_positions()) != 0:
                 positions = self.get_opened_positions()
                 for position in positions:
@@ -237,18 +226,17 @@ class LiveStopLoss:
                             self.tp_point = 2 * self.sl_point
                             print(f'Set Automatic Take Profit in {int(self.tp_point / self.point)} point ')
 
-                        # check money management of SL if ture , set self.trail_sl as position['sl']
                     else:
                         self.trail_stop_loss(position)
             else:
                 print(f'No Position in {self.config["symbol"]}')
-                time.sleep(1)
-            time.sleep(1)
+                time.sleep(0.01)
+            time.sleep(0.01)
 
 
 config = {
-    'symbol': 'GBPJPY_i',
-    'stop_loss': 170,
+    'symbol': 'GBPJPY',
+    'stop_loss': 30,
     'high_freq_pull_back': True,
 }
 live_sl = LiveStopLoss(config)
