@@ -78,10 +78,10 @@ class LiveStopLoss:
             elif stop_loss_price is None:
                 sl_price = position['price_current'] + self.config['stop_loss'] * self.point
                 self.last_sl_price = sl_price
-                print('Position Sell without SL , set automatic SL_price', sl_price)
+                print('Position Sell without SL , Set Automatic in ', sl_price)
 
             if position['tp'] == 0:
-                tp_price = position['price_current'] - 3 * self.config['stop_loss'] * self.point
+                tp_price = position['price_open'] - 3 * self.config['stop_loss'] * self.point
                 print('Position Sell without TP, Set Automatic in ', tp_price)
 
             else:
@@ -96,7 +96,7 @@ class LiveStopLoss:
                 print('Position Buy without SL, Set Automatic in ', sl_price)
 
             if position['tp'] == 0:
-                tp_price = position['price_current'] + 3 * self.config['stop_loss'] * self.point
+                tp_price = position['price_open'] + 3 * self.config['stop_loss'] * self.point
                 print('Position Buy without TP, Set Automatic in ', tp_price)
 
             else:
@@ -218,15 +218,8 @@ class LiveStopLoss:
             while len(self.get_opened_positions()) != 0:
                 positions = self.get_opened_positions()
                 for position in positions:
-                    if position['sl'] == 0:
+                    if position['sl'] == 0 or position['tp'] == 0:
                         self.set_stop_loss(position)
-                        positions_x = self.get_opened_positions()[0]
-                        if positions_x['ticket'] == position['ticket']:
-                            self.last_sl_price = positions_x['sl']
-                            self.sl_point = abs(positions_x['sl'] - positions_x['price_open'])
-                            self.tp_point = 2 * self.sl_point
-                            print(f'Set Automatic Trail Stop Loss  in {int(self.sl_point / self.point)} point ')
-                            print(f'Set Automatic Take Profit in {int(self.tp_point / self.point)} point ')
 
                     elif position['sl'] != 0 and self.last_sl_price is None:
                         self.last_sl_price = position['sl']
@@ -240,17 +233,17 @@ class LiveStopLoss:
                             self.tp_point = 2 * self.sl_point
                             print(f'Set Automatic Take Profit in {int(self.tp_point / self.point)} point ')
 
-                    else:
+                    elif self.sl_point is not None:
                         self.trail_stop_loss(position)
             else:
                 print(f'No Position in {self.config["symbol"]}')
-                time.sleep(1)
-            time.sleep(1)
+                time.sleep(0.1)
+            time.sleep(0.1)
 
 
 config = {
-    'symbol': 'GBPJPY',
-    'stop_loss': 30,
+    'symbol': 'GBPJPY_i',
+    'stop_loss': 185,
     'high_freq_pull_back': True,
 }
 live_sl = LiveStopLoss(config)

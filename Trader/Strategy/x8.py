@@ -26,9 +26,6 @@ rates = mt5.copy_rates_range("GBPJPY", mt5.TIMEFRAME_M5, utc_from, utc_to)
 rates = pd.DataFrame(rates)
 rates['time'] = pd.to_datetime(rates['time'], unit='s')
 rates = rates.set_index('time')
-pd.set_option('display.max_columns', 500)  # number of columns to be displayed
-pd.set_option('display.width', 1500)  # max table width to display
-print(rates.tail(30))
 
 
 class Candle:
@@ -87,18 +84,18 @@ class Candle:
 #
 # plt.imshow(img.T, interpolation='none')
 # plt.show()
-r1m = Candle(rates).gen_tick_bar()
-print(r1m.tail(30))
-rates.to_csv("C:\\Users\\z\\Desktop\\rates_m1.csv")
-import finplot as fplt
-
-fplt.foreground = '#eef'
-fplt.background = '#0a081b'
-candle_bull_color = '#26a69a'
-candle_bear_color = '#ef5350'
-fplt.odd_plot_background = '#0a081b'
-ax = fplt.create_plot('Things move', rows=1, init_zoom_periods=2 * 60, maximize=True)
-fplt.candlestick_ochl(r1m[['open', 'close', 'high', 'low']].dropna(), ax=ax)
-#fplt.add_rect(1, 100, color='#26a69a', interactive=False, ax=ax)
-
-fplt.show(qt_exec=True)
+# r1m = Candle(rates).gen_tick_bar()
+# print(r1m.tail(30))
+# rates.to_csv("C:\\Users\\z\\Desktop\\rates_m1.csv")
+# import finplot as fplt
+#
+# fplt.foreground = '#eef'
+# fplt.background = '#0a081b'
+# candle_bull_color = '#26a69a'
+# candle_bear_color = '#ef5350'
+# fplt.odd_plot_background = '#0a081b'
+# ax = fplt.create_plot('Things move', rows=1, init_zoom_periods=2 * 60, maximize=True)
+# fplt.candlestick_ochl(r1m[['open', 'close', 'high', 'low']].dropna(), ax=ax)
+# #fplt.add_rect(1, 100, color='#26a69a', interactive=False, ax=ax)
+#
+# fplt.show(qt_exec=True)

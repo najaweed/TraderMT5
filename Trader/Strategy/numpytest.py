@@ -35,3 +35,4 @@ ticks_frame = pd.DataFrame(ticks)
 ticks_frame['time'] = pd.to_datetime(ticks_frame['time'], unit='s')
 data_x = ticks_frame.ask
 
+
