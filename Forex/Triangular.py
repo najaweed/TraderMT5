@@ -87,10 +87,24 @@ class Triangular:
                  config,
                  ):
         self.config = config
+        self.df = config['df_initial']
+        self.triple = self.get_currencies(self.df)
+        self.points = self._get_points()
+
         self.len_stats = 0
         self.base_states = self.gen_state()
-        self.close = {}
-        self.spread={}
+        self.spread = {}
+        self.in_state = self.gen_initial_state()
+        self.close = {f'{sym}': self.df[f'{sym},close'][0] for sym, _ in self.triple.items()}
+
+        self.close_t = None
+    def _get_points(self):
+        points = []
+        for sym, _  in self.triple.items():
+            p= mt5.symbol_info(f'{sym}_i')._asdict()
+            p = p['point']
+            points.append(p)
+        return points
 
     def gen_state(self):
         state_dict = []
@@ -136,7 +150,7 @@ class Triangular:
         return np.nan_to_num(m)
 
     @staticmethod
-    def get_currencies( df_initial):
+    def get_currencies(df_initial):
         xsymbols = [c[:6] for c in df_initial.columns]
         symbols = []
         for sym in xsymbols:
@@ -162,10 +176,9 @@ class Triangular:
 
         return triple_dict
 
-    @staticmethod
-    def calculate_arbitrage( r_close, triple):
+    def calculate_arbitrage(self, r_close):
         arb = 1
-        for sym, value in triple.items():
+        for sym, value in self.triple.items():
             if value == 1:
                 arb *= r_close[sym]
             elif value == -1:
@@ -174,110 +187,55 @@ class Triangular:
                 print('wrong value for sign of triple')
         return np.log(arb)
 
-    def _gen_random_close(self, df_initial):
-        triple = self.get_currencies(df_initial)
-        symbols = triple.keys()
-        st_dev = {f'{sym}': (df_initial[f'{sym},high'][0] - df_initial[f'{sym},low'][0]) / 6 for sym in symbols}
+    def _gen_random_close(self, ):
+        symbols = self.triple.keys()
+        st_dev = {f'{sym}': (self.df[f'{sym},high'][0] - self.df[f'{sym},low'][0]) / 6 for sym in symbols}
         random_close = {}
-        self.close = {f'{sym}': df_initial[f'{sym},close'][0] for sym in symbols}
+        # self.close = {f'{sym}': df_initial[f'{sym},close'][0] for sym in symbols}
 
-        r_close = {f'{sym}': df_initial[f'{sym},close'][0] + np.random.normal(scale=st_dev[sym]) for sym in symbols}
+        r_close = {f'{sym}': self.df[f'{sym},close'][0] + np.random.normal(scale=st_dev[sym]) for sym in symbols}
         for sym, close in r_close.items():
             random_close[f'{sym}'] = np.clip(close,
-                                             a_min=df_initial[f'{sym},low'][0],
-                                             a_max=df_initial[f'{sym},high'][0])
+                                             a_min=self.df[f'{sym},low'][0],
+                                             a_max=self.df[f'{sym},high'][0])
         return random_close
 
-    def _calculate_diff_point(self, random_close, df_initial):
-        triple = self.get_currencies(df_initial)
-        symbols = triple.keys()
+    def _calculate_diff_point(self, random_close, ):
+        symbols = self.triple.keys()
         diff = {}
-        for sym in symbols:
-            diff[f'{sym}'] = (random_close[sym] - df_initial[f'{sym},open'][0])
-            symx = f'{sym}_i'
-            point = mt5.symbol_info(symx)._asdict()['point']
-            diff[f'{sym}'] /= point
+        for i,sym in enumerate(symbols):
+            diff[f'{sym}'] = (random_close[sym] - self.df[f'{sym},open'][0])
+            # symx = f'{sym}_i'
+            # point = mt5.symbol_info(symx)._asdict()['point']
+            diff[f'{sym}'] /= self.points[i]
         return diff
 
-    @staticmethod
-    def _calculate_prob(index_states):
+    def _calculate_prob(self, index_states):
 
         count_st = {i: index_states.count(i) for i in index_states}
-        prob = np.zeros(tr.len_stats)
+        prob = np.zeros(self.len_stats)
         for i, k in count_st.items():
             prob[int(i)] = k
         prob /= len(index_states)
         return prob
 
-    def gen_initial_state(self, df_initial):
-        triple = self.get_currencies(df_initial)
-        symbols = triple.keys()
+    def gen_initial_state(self, ):
+        symbols = self.triple.keys()
         index_st = []
-
         for _ in range(200):
-            r_close = self._gen_random_close(df_initial)
-            arbitrage = self.calculate_arbitrage(r_close, triple)
+            r_close = self._gen_random_close()
+            arbitrage = self.calculate_arbitrage(r_close)
+
             if abs(arbitrage) <= 1e-4:
-                diff = self._calculate_diff_point(r_close, df_initial)
-                spreads = {f'{sym}': df_initial[f'{sym},spread'][0] for sym in symbols}
+                diff = self._calculate_diff_point(r_close, )
+                spreads = {f'{sym}': self.df[f'{sym},spread'][0] for sym in symbols}
                 self.spread = spreads
                 diff_spreads = {f'{sym}': int(diff[sym] / spreads[sym]) for sym in symbols}
                 index_st.append(self.state_index(diff_spreads))
+
         prob_state = self._calculate_prob(index_st)
 
         return prob_state
-
-    def candle_to_state(self, symbol_list, index=1):
-        a_b = get_live_candle(symbol_list[0])
-        c_a = get_live_candle(symbol_list[1])
-        x_b_c = get_live_candle(symbol_list[2])
-
-        a_b_tr = (a_b.high[-index] - a_b.low[-index]) / 6
-        c_a_tr = (c_a.high[-index] - c_a.low[-index]) / 6
-        x_b_c_tr = (x_b_c.high[-index] - x_b_c.low[-index]) / 6
-
-        a_b.close[-index] += np.random.normal(0, a_b_tr)
-        c_a.close[-index] += np.random.normal(0, c_a_tr)
-        x_b_c.close[-index] += np.random.normal(0, x_b_c_tr)
-
-        # for _ in range(100):
-        #     print((a_b.close[-index]+np.random.normal(0,a_b_tr)) * (c_a.close[-index]+np.random.normal(0,c_a_tr)) / (x_b_c.close[-index]+np.random.normal(0,x_b_c_tr)))
-        #
-        # print(a_b.open[-index] * c_a.open[-index] / x_b_c.open[-index])
-        # print(a_b.high[-index] * c_a.high[-index] / x_b_c.low[-index])
-        # print(a_b.low[-index] * c_a.low[-index] / x_b_c.high[-index])
-
-        # print(a_b.close[-index] * c_a.close[-index] / x_b_c.close[-index])
-        # print(a_b.open[-index] * c_a.open[-index] / x_b_c.open[-index])
-        # print(a_b.high[-index] * c_a.high[-index] / x_b_c.low[-index])
-        # print(a_b.low[-index] * c_a.low[-index] / x_b_c.high[-index])
-        # breakpoint()
-
-        diff_a_b = a_b.close[-index] - a_b.open[-index]
-        diff_c_a = c_a.close[-index] - c_a.open[-index]
-        diff_x_b_c = x_b_c.close[-index] - x_b_c.open[-index]
-
-        diff_a_b /= mt5.symbol_info(symbol_list[0])._asdict()['point']
-        diff_c_a /= mt5.symbol_info(symbol_list[1])._asdict()['point']
-        diff_x_b_c /= mt5.symbol_info(symbol_list[2])._asdict()['point']
-
-        spreads = [a_b['spread'][-index], c_a['spread'][-index], x_b_c['spread'][-index]]
-        spreads = np.clip(spreads, a_min=4, a_max=1100)
-        # spreads *=2
-        diff = [int(diff_a_b), int(diff_c_a), int(diff_x_b_c)]
-        filter_diff = np.zeros_like(diff)
-
-        for i, dif in enumerate(diff):
-            if dif >= spreads[i]:
-                filter_diff[i] = int(dif / spreads[i])
-            elif dif <= -spreads[i]:
-                filter_diff[i] = int(dif / spreads[i])
-            else:
-                filter_diff[i] = 0
-        triple_close = [a_b.close[-index], c_a.close[-index], x_b_c.close[-index]]
-
-        filter_diff = np.clip(filter_diff, a_min=-self.config['num_states'], a_max=self.config['num_states'])
-        return tuple(filter_diff), triple_close
 
     def state_index(self, diff_spreads):
         state = [val for val in diff_spreads.values()]
@@ -286,6 +244,7 @@ class Triangular:
         state = tuple(state)
         return list(self.base_states.keys())[list(self.base_states.values()).index(state)]
 
+
     @staticmethod
     def state_transition(initial_state, transition_matrix):
         state_t = transition_matrix @ initial_state
@@ -293,26 +252,59 @@ class Triangular:
         state_t /= sum(state_t)
         return state_t
 
-    def rates_transition(self,state_transition):
-        close = self.close
-        print(close)
-        for i, (sym , rate) in enumerate(close.items()):
-            symx = f'{sym}_i'
-            point = mt5.symbol_info(symx)._asdict()['point']
-            close[sym] += state_transition[i]*self.spread[sym]*point
-            #print(sym,rate,point,self.spread[sym],self.spread[sym]*point)
+    def rates_transition(self, state_transition,close_rates=None):
+        if close_rates is None:
+            close = self.close.copy()
+        else:
+            close = close_rates
+
+        for i, (sym, rate) in enumerate(close.items()):
+            close[sym] += state_transition[i] * self.spread[sym] * self.points[i]
         return close
+
+    def avg_price_transition(self, states,close_rates=None):
+        # print(states)
+        symbols = self.triple.keys()
+        state_price = {f'{sym}': [[], []] for sym in symbols}
+        for i, state in enumerate(states):
+            if state != 0:
+                close_t = tr.rates_transition(self.base_states[f'{i}'], close_rates)
+                for sym, price in close_t.items():
+                    state_price[f'{sym}'][0].append(price)
+                    state_price[f'{sym}'][1].append(state)
+                pass
+
+        avg_close_price = {}
+        for sym in symbols:
+            avg_close_price[f'{sym}'] = np.average(state_price[sym][0], weights=state_price[sym][1])
+        return avg_close_price
+
 
 symbolsx = ['GBPJPY_i', 'EURGBP_i', 'EURJPY_i', ]
 df = get_last_df(symbolsx)
-tr = Triangular(config={'num_states': 1, })
-in_state = tr.gen_initial_state(df)
-print(tr.close)
-#for _ in range(100):
-transition_prob = tr.gen_random_transition()
-state = tr.state_transition(in_state, transition_prob)
-print(state)
-print(tr.rates_transition((1,0,-1)))
-close_t = tr.rates_transition((1,0,-1))
-triple = tr.get_currencies(df)
-print(tr.calculate_arbitrage(close_t,triple))
+tr = Triangular(config={'num_states': 1, 'df_initial': df})
+in_state = tr.gen_initial_state()
+print(in_state)
+# k=0
+#
+# for i in range(100000):
+#     transition_prob = tr.gen_random_transition()
+#
+#     states = tr.state_transition(x_in_state, transition_prob)
+#     avg_close_price = tr.avg_price_transition(states, x_close)
+#     arbitrage = tr.calculate_arbitrage(avg_close_price, )
+#
+#     if abs(arbitrage) <5e-4:
+#         # print(x_close)
+#         # print(avg_close_price)
+#         states = tr.state_transition(states, transition_prob)
+#         avg_close_price1 = tr.avg_price_transition(states, avg_close_price)
+#         arbitrage = tr.calculate_arbitrage(avg_close_price1, )
+#         if abs(arbitrage) <5e-4:
+#             print(i)
+#             print(x_close)
+#             print(avg_close_price)
+#             print(avg_close_price1)
+#             k+=1
+# print(k)
+#
