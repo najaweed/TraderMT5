@@ -86,6 +86,6 @@ class PlotPriceLevel:
 from LiveRate import HistoricalCandle
 from PriceLevel import PriceLevel
 
-hc = HistoricalCandle('CHFJPY_i')
-ppl = PlotPriceLevel(hc.get_all_dfs(), hc.get_last_day(12*12))
+hc = HistoricalCandle('GBPJPY_i')
+ppl = PlotPriceLevel(hc.get_all_dfs(), hc.get_last_day(12*10))
 ppl.mpl_plot()
